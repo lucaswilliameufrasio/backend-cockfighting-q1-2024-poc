@@ -1,5 +1,5 @@
-DROP TABLE transactions;
-DROP TABLE customers;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS customers;
 
 CREATE TABLE customers (
     id INTEGER PRIMARY KEY NOT NULL,
