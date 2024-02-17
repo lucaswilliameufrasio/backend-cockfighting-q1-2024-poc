@@ -10,7 +10,8 @@ services:
     networks:
       - fight-pit
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -28,6 +29,7 @@ services:
     depends_on:
       - api01
       - api02
+      - db
     ports:
       - "9999:9999"
     networks:
@@ -52,8 +54,8 @@ services:
     networks:
       - fight-pit
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
-      interval: 10s
+      test: [ "CMD-SHELL", "pg_isready"]
+      interval: 5s
       timeout: 5s
       retries: 5
     deploy:
