@@ -7,7 +7,7 @@ dev:
 .PHONY: dev
 
 start-compose-services:
-	$ docker compose up -d
+	$ docker compose up -d --build
 PHONY: start-database
 
 stop-all-compose-services:
