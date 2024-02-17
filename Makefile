@@ -1,11 +1,15 @@
 build-container:
-	docker build --progress=plain -t gatling-on-docker -f Dockerfile .
+	sudo docker build --progress=plain -t gatling-on-docker -f Dockerfile .
 .PHONY: build-container
 
 start-container:
-	docker run -it -d -v ./local-results:/opt/gatling/results --network=host --name gatling gatling-on-docker || echo 'Maybe it is already running'
+	sudo docker run -it -d --network host -v ./local-results:/opt/gatling/results --name gatling gatling-on-docker || echo 'Maybe it is already running'
+.PHONY: start-container
+
+stop-container:
+	sudo docker stop gatling && docker rm gatling
 .PHONY: start-container
 
 run-simulation:
-	docker exec gatling /opt/gatling/bin/gatling.sh -rm local -sf /opt/gatling/user-files/simulations -s RinhaBackendCrebitosSimulation -rf /opt/gatling/results
+	sudo docker exec gatling /opt/gatling/bin/gatling.sh -rm local -sf /opt/gatling/user-files/simulations -s RinhaBackendCrebitosSimulation -rf /opt/gatling/results
 .PHONY: run-simulation
