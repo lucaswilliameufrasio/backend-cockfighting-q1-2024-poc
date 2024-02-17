@@ -1,6 +1,7 @@
 # Backend Cockfighting Q1 2024 POC
 
-Note: :warning: **This README does not cover the Windows and Mac process** :warning:
+Note1: :warning: **This README does not cover the Windows and Mac process** :warning:
+Note2: If you are a Docker Rootless user, i suggest you to use `sudo` because Docker Rootless runs `slirp4netns` with the `--disable-host-loopback` option, so the Gatling cannot access localhost.
 
 ## How to build the image
 
