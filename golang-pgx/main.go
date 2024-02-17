@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	pgxdecimal "github.com/jackc/pgx-shopspring-decimal"
@@ -19,7 +20,9 @@ import (
 var db *pgxpool.Pool
 
 func main() {
-	dbPool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	ctx := context.Background()
+	defer ctx.Done()
+	dbPool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create connection pool: %v\n", err)
 		os.Exit(1)
@@ -34,9 +37,9 @@ func main() {
 	db = dbPool
 
 	var greeting string
-	err = db.QueryRow(context.Background(), "SELECT 'Hello, world!'").Scan(&greeting)
+	err = db.QueryRow(ctx, "SELECT 'Hello, world!'").Scan(&greeting)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		fmt.Printf("Initial query failed: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -75,12 +78,7 @@ type SaveTransactionRequestBody struct {
 }
 
 func saveTransaction(w http.ResponseWriter, r *http.Request) {
-	customerId := r.PathValue("id")
-
-	log.Printf("rélou %s", customerId)
-
-	var transaction SaveTransactionRequestBody
-	err := json.NewDecoder(r.Body).Decode(&transaction)
+	customerId, err := strconv.Atoi(r.PathValue("id"))
 
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -89,9 +87,29 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Transaction type %s\n", transaction.Type)
-	log.Printf("Transaction description %s\n", transaction.Description)
-	log.Printf("Transaction value %d\n", transaction.Value)
+	if customerId < 1 || customerId > 5 {
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("{\"message\":\"Cliente não encontrado\"}"))
+		return
+	}
+
+	// log.Printf("rélou %s", customerId)
+
+	var transaction SaveTransactionRequestBody
+	err = json.NewDecoder(r.Body).Decode(&transaction)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		w.Write([]byte("{\"message\":\"Teus dados tão tudo inválidos, macho\"}"))
+		return
+	}
+
+	// log.Printf("Transaction type %s\n", transaction.Type)
+	// log.Printf("Transaction description %s\n", transaction.Description)
+	// log.Printf("Transaction value %d\n", transaction.Value)
 
 	descriptionLength := len(transaction.Description)
 
@@ -111,7 +129,7 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(ctx)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "transaction initiation failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "transaction initiation failed: %v\n", err)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -119,12 +137,14 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var balance int64
+	// var balance int64
 	var limit int64
-	err = tx.QueryRow(ctx, "SELECT balance, \"limit\" FROM customers WHERE customers.id = $1 FOR UPDATE;", customerId).Scan(&balance, &limit)
+
+	// err = tx.QueryRow(ctx, "SELECT balance, \"limit\" FROM customers WHERE customers.id = $1 FOR UPDATE;", customerId).Scan(&balance, &limit)
+	err = tx.QueryRow(ctx, "SELECT \"limit\" FROM customers WHERE customers.id = $1 FOR UPDATE;", customerId).Scan(&limit)
 
 	if err != nil && err.Error() == "no rows in result set" {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("{\"message\":\"Cliente não encontrado\"}"))
@@ -132,7 +152,7 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -140,8 +160,8 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Customer balance on %d\n", balance)
-	log.Printf("Customer limit on %d\n", limit)
+	// log.Printf("Customer balance on %d\n", balance)
+	// log.Printf("Customer limit on %d\n", limit)
 
 	_, err = tx.Exec(ctx, `
   		INSERT INTO
@@ -161,8 +181,8 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Test: %s\n", err.Error())
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "Test: %s\n", err.Error())
 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "The transaction cannot exceed the bounds of the balance." {
@@ -183,7 +203,7 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 	if transaction.Type == "d" {
 		err = tx.QueryRow(ctx, "UPDATE customers SET balance = balance - $1 WHERE id = $2 RETURNING balance;", transaction.Value, customerId).Scan(&updated_balance)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+			// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -194,7 +214,7 @@ func saveTransaction(w http.ResponseWriter, r *http.Request) {
 		err = tx.QueryRow(ctx, "UPDATE customers SET balance = balance + $1 WHERE id = $2 RETURNING balance;", transaction.Value, customerId).Scan(&updated_balance)
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+			// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -258,14 +278,42 @@ func loadBankStatement(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	defer ctx.Done()
 
-	customerId := r.PathValue("id")
+	customerId, err := strconv.Atoi(r.PathValue("id"))
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		w.Write([]byte("{\"message\":\"Teus dados tão tudo inválidos, macho\"}"))
+		return
+	}
+
+	// customer := findCachedCustomerById(customerId)
+
+	// if customer == nil {
+	// 	// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+	// 	w.Header().Set("Content-Type", "application/json")
+	// 	w.WriteHeader(http.StatusNotFound)
+	// 	w.Write([]byte("{\"message\":\"Cliente não encontrado\"}"))
+	// 	return
+	// }
+
+	if customerId < 1 || customerId > 5 {
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("{\"message\":\"Cliente não encontrado\"}"))
+		return
+	}
 
 	var customerStatement CustomerStatement
 
-	err := db.QueryRow(ctx, "SELECT balance, \"limit\", NOW() FROM customers WHERE customers.id = $1;", customerId).Scan(&customerStatement.Balance, &customerStatement.Limit, &customerStatement.GeneratedAt)
+	// customerStatement.Limit = customer.Limit
+
+	err = db.QueryRow(ctx, "SELECT balance, \"limit\", NOW() FROM customers WHERE customers.id = $1;", customerId).Scan(&customerStatement.Balance, &customerStatement.Limit, &customerStatement.GeneratedAt)
+	// err = db.QueryRow(ctx, "SELECT balance, NOW() FROM customers WHERE customers.id = $1;", customerId).Scan(&customerStatement.Balance, &customerStatement.GeneratedAt)
 
 	if err != nil && err.Error() == "no rows in result set" {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("{\"message\":\"Cliente não encontrado\"}"))
@@ -273,7 +321,7 @@ func loadBankStatement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -284,7 +332,7 @@ func loadBankStatement(w http.ResponseWriter, r *http.Request) {
 	transactions, err := loadLastTenTransactions(ctx, customerId)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -322,16 +370,16 @@ func loadBankStatement(w http.ResponseWriter, r *http.Request) {
 	w.Write(response)
 }
 
-func loadLastTenTransactions(ctx context.Context, customerId string) (Transactions, error) {
+func loadLastTenTransactions(ctx context.Context, customerId int) (Transactions, error) {
 	rows, err := db.Query(ctx, "SELECT description, type, value, created_at FROM transactions WHERE customer_id = $1 ORDER BY transactions.id DESC LIMIT 10", customerId)
 
 	if err != nil && err.Error() == "no rows in result set" {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		return Transactions{}, nil
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		return Transactions{}, err
 	}
 
