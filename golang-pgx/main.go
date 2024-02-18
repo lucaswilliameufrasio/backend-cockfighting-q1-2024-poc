@@ -19,18 +19,32 @@ import (
 
 var db *pgxpool.Pool
 
+const defaultMaxConns = int32(30)
+const defaultMinConns = int32(30)
+
 func main() {
 	ctx := context.Background()
 	defer ctx.Done()
-	dbPool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+
+	dbConfig, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create connection pool: %v\n", err)
+		log.Fatal("Failed to create a pgxpool config, error: ", err)
 		os.Exit(1)
 	}
-	dbPool.Config().AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+
+	dbConfig.MaxConns = defaultMaxConns
+	dbConfig.MinConns = defaultMinConns
+
+	dbConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		pgxdecimal.Register(conn.TypeMap())
 
 		return nil
+	}
+
+	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to create connection pool: %v\n", err)
+		os.Exit(1)
 	}
 	defer dbPool.Close()
 
