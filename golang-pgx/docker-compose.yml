@@ -16,7 +16,7 @@ services:
       resources:
         limits:
           cpus: "0.25"
-          memory: "50MB"
+          memory: "30MB"
 
   api02:
     <<: *api
@@ -38,7 +38,7 @@ services:
       resources:
         limits:
           cpus: "0.2"
-          memory: "50MB"
+          memory: "20MB"
 
   db:
     image: postgres:latest
@@ -62,7 +62,7 @@ services:
       resources:
         limits:
           cpus: "0.8"
-          memory: "400MB"
+          memory: "470MB"
 
 networks:
   fight-pit:
