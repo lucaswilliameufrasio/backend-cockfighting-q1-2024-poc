@@ -1,6 +1,6 @@
-build-container:
-	sudo docker build --progress=plain -t gatling-on-docker -f Dockerfile .
-.PHONY: build-container
+build-image:
+	sudo docker build --no-cache --progress=plain -t gatling-on-docker -f Dockerfile .
+.PHONY: build-image
 
 start-container:
 	sudo docker start gatling
