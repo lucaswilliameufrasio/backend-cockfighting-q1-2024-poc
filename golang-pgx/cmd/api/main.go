@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var db *pgxpool.Pool
+// var db *pgxpool.Pool
 
 const defaultMaxConns = int32(30)
 const defaultMinConns = int32(30)
@@ -44,10 +44,16 @@ func main() {
 	}
 	defer dbPool.Close()
 
-	db = dbPool
+	err = dbPool.Ping(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to ping the databse: %v\n", err)
+		os.Exit(1)
+	}
+
+	// db = dbPool
 
 	var greeting string
-	err = db.QueryRow(ctx, "SELECT 'Hello, world!'").Scan(&greeting)
+	err = dbPool.QueryRow(ctx, "SELECT 'Hello, world!'").Scan(&greeting)
 	if err != nil {
 		fmt.Printf("Initial query failed: %v\n", err)
 		os.Exit(1)
@@ -57,7 +63,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	transactionController := transaction.NewTransactionController(dbPool)
+	transactionRepository := transaction.NewTransactionRepository(dbPool)
+	transactionController := transaction.NewTransactionController(transactionRepository)
 
 	mux.HandleFunc("GET /health-check", healthCheck)
 	mux.HandleFunc("POST /clientes/{id}/transacoes", transactionController.SaveTransaction)
