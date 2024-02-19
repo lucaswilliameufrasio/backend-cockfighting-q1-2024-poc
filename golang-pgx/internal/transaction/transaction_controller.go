@@ -44,12 +44,9 @@ func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http
 	}
 
 	if customerId < 1 || customerId > 5 {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		helper.MakeHttpNotFoundErrorResponse(w, "Cliente não encontrado")
 		return
 	}
-
-	// log.Printf("rélou %s", customerId)
 
 	var transaction SaveTransactionRequestBody
 	err = json.NewDecoder(r.Body).Decode(&transaction)
@@ -58,10 +55,6 @@ func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http
 		helper.MakeHttpUnprocessableEntityErrorResponse(w, "Não foi possível processar sua requisição, pois foram enviados dados inválidos")
 		return
 	}
-
-	// log.Printf("Transaction type %s\n", transaction.Type)
-	// log.Printf("Transaction description %s\n", transaction.Description)
-	// log.Printf("Transaction value %d\n", transaction.Value)
 
 	descriptionLength := len(transaction.Description)
 
@@ -82,20 +75,16 @@ func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http
 	})
 
 	if err != nil && errors.Is(err, &custom_error.CustomerNotFoundError{}) {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		helper.MakeHttpNotFoundErrorResponse(w, err.Error())
 		return
 	}
 
 	if err != nil && errors.Is(err, &custom_error.TransactionOutOfBoundError{}) {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		helper.MakeHttpUnprocessableEntityErrorResponse(w, err.Error())
 		return
 	}
 
 	if err != nil {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-
 		helper.MakeHttpInternalServerErrorResponse(w)
 		return
 	}
