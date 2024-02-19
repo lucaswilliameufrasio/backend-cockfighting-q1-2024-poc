@@ -1,6 +1,7 @@
 package main
 
 import (
+	"backend-cockfighting-q1-2024-golang-pgx-poc/helper"
 	"backend-cockfighting-q1-2024-golang-pgx-poc/internal/transaction"
 	"context"
 	"fmt"
@@ -12,8 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// var db *pgxpool.Pool
 
 const defaultMaxConns = int32(30)
 const defaultMinConns = int32(30)
@@ -50,8 +49,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// db = dbPool
-
 	var greeting string
 	err = dbPool.QueryRow(ctx, "SELECT 'Hello, world!'").Scan(&greeting)
 	if err != nil {
@@ -84,8 +81,6 @@ func main() {
 var healthCheckResponse = []byte("{\"message\": \"ok\"}")
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(healthCheckResponse)
+	helper.MakeHttpResponseFromJSONBytes(w, http.StatusOK, healthCheckResponse)
+	return
 }

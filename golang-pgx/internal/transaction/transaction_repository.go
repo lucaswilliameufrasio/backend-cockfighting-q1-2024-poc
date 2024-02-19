@@ -24,15 +24,11 @@ func NewTransactionRepository(db *pgxpool.Pool) TransactionRepository {
 
 func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input SaveTransactionInput) (CustomerStatement, error) {
 	tx, err := tctx.db.BeginTx(ctx, pgx.TxOptions{})
-	// tx, err := db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	defer tx.Rollback(ctx)
 
 	if err != nil {
-		// fmt.Fprintf(os.Stderr, "transaction initiation failed: %v\n", err)
 		return CustomerStatement{}, err
 	}
-
-	// err = tx.QueryRow(ctx, "SELECT balance, \"limit\" FROM customers WHERE customers.id = $1 FOR UPDATE;", customerId).Scan(&balance, &limit)
 
 	var limit int
 	err = tx.QueryRow(ctx, "SELECT \"limit\" FROM customers WHERE customers.id = $1 FOR UPDATE;", input.CustomerId).Scan(&limit)
@@ -63,9 +59,6 @@ func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input Sav
 	)
 
 	if err != nil {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-		// fmt.Fprintf(os.Stderr, "Test: %s\n", err.Error())
-
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "The transaction cannot exceed the bounds of the balance." {
 			return CustomerStatement{}, &custom_error.TransactionOutOfBoundError{}
@@ -79,16 +72,12 @@ func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input Sav
 	if input.Type == "d" {
 		err = tx.QueryRow(ctx, "UPDATE customers SET balance = balance - $1 WHERE id = $2 RETURNING balance;", input.Value, input.CustomerId).Scan(&updated_balance)
 		if err != nil {
-			// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-
 			return CustomerStatement{}, err
 		}
 	} else {
 		err = tx.QueryRow(ctx, "UPDATE customers SET balance = balance + $1 WHERE id = $2 RETURNING balance;", input.Value, input.CustomerId).Scan(&updated_balance)
 
 		if err != nil {
-			// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-
 			return CustomerStatement{}, err
 		}
 	}
@@ -128,12 +117,10 @@ func (tctx TransactionRepository) LoadLastTenTransactions(ctx context.Context, c
 	defer rows.Close()
 
 	if err != nil && err.Error() == "no rows in result set" {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		return Transactions{}, nil
 	}
 
 	if err != nil {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		return Transactions{}, err
 	}
 

@@ -149,36 +149,19 @@ func (tctx TransactionController) LoadBankStatement(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// customer := findCachedCustomerById(customerId)
-
-	// if customer == nil {
-	// 	// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-	// 	w.Header().Set("Content-Type", "application/json")
-	// 	w.WriteHeader(http.StatusNotFound)
-	// 	w.Write([]byte("{\"message\":\"Cliente não encontrado\"}"))
-	// 	return
-	// }
-
 	if customerId < 1 || customerId > 5 {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		helper.MakeHttpNotFoundErrorResponse(w, "Cliente não encontrado")
 		return
 	}
 
-	// customerStatement.Limit = customer.Limit
-
 	customerStatement, err := tctx.transactionRepository.LoadCustomerStatement(ctx, customerId)
 
-	// err = db.QueryRow(ctx, "SELECT balance, NOW() FROM customers WHERE customers.id = $1;", customerId).Scan(&customerStatement.Balance, &customerStatement.GeneratedAt)
-
 	if err != nil && errors.Is(err, &custom_error.CustomerNotFoundError{}) {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		helper.MakeHttpNotFoundErrorResponse(w, err.Error())
 		return
 	}
 
 	if err != nil {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		helper.MakeHttpInternalServerErrorResponse(w)
 		return
 	}
@@ -186,8 +169,6 @@ func (tctx TransactionController) LoadBankStatement(w http.ResponseWriter, r *ht
 	transactions, err := tctx.transactionRepository.LoadLastTenTransactions(ctx, customerId)
 
 	if err != nil {
-		// fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-
 		helper.MakeHttpInternalServerErrorResponse(w)
 		return
 	}
