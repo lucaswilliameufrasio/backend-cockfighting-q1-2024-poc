@@ -22,23 +22,23 @@ func NewTransactionRepository(db *pgxpool.Pool) TransactionRepository {
 	}
 }
 
-func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input SaveTransactionInput) (CustomerStatement, error) {
+func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input MakeTransactionInput) (MakeTransactionOutput, error) {
 	tx, err := tctx.db.BeginTx(ctx, pgx.TxOptions{})
 	defer tx.Rollback(ctx)
 
 	if err != nil {
-		return CustomerStatement{}, err
+		return MakeTransactionOutput{}, err
 	}
 
 	var limit int
 	err = tx.QueryRow(ctx, "SELECT \"limit\" FROM customers WHERE customers.id = $1 FOR UPDATE;", input.CustomerId).Scan(&limit)
 
 	if err != nil && err.Error() == "no rows in result set" {
-		return CustomerStatement{}, &custom_error.CustomerNotFoundError{}
+		return MakeTransactionOutput{}, &custom_error.CustomerNotFoundError{}
 	}
 
 	if err != nil {
-		return CustomerStatement{}, err
+		return MakeTransactionOutput{}, err
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -61,10 +61,10 @@ func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input Sav
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "The transaction cannot exceed the bounds of the balance." {
-			return CustomerStatement{}, &custom_error.TransactionOutOfBoundError{}
+			return MakeTransactionOutput{}, &custom_error.TransactionOutOfBoundError{}
 		}
 
-		return CustomerStatement{}, err
+		return MakeTransactionOutput{}, err
 	}
 
 	var updated_balance int
@@ -72,13 +72,13 @@ func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input Sav
 	if input.Type == "d" {
 		err = tx.QueryRow(ctx, "UPDATE customers SET balance = balance - $1 WHERE id = $2 RETURNING balance;", input.Value, input.CustomerId).Scan(&updated_balance)
 		if err != nil {
-			return CustomerStatement{}, err
+			return MakeTransactionOutput{}, err
 		}
 	} else {
 		err = tx.QueryRow(ctx, "UPDATE customers SET balance = balance + $1 WHERE id = $2 RETURNING balance;", input.Value, input.CustomerId).Scan(&updated_balance)
 
 		if err != nil {
-			return CustomerStatement{}, err
+			return MakeTransactionOutput{}, err
 		}
 	}
 
@@ -86,32 +86,16 @@ func (tctx TransactionRepository) SaveTransaction(ctx context.Context, input Sav
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "transaction commit failed: %v\n", err)
-		return CustomerStatement{}, err
+		return MakeTransactionOutput{}, err
 	}
 
-	return CustomerStatement{
+	return MakeTransactionOutput{
 		Balance: updated_balance,
 		Limit:   limit,
 	}, nil
 }
 
-func (tctx TransactionRepository) LoadCustomerStatement(ctx context.Context, customerId int) (CustomerStatement, error) {
-	var customerStatement CustomerStatement
-
-	err := tctx.db.QueryRow(ctx, "SELECT balance, \"limit\" FROM customers WHERE customers.id = $1;", customerId).Scan(&customerStatement.Balance, &customerStatement.Limit)
-
-	if err != nil && err.Error() == "no rows in result set" {
-		return customerStatement, &custom_error.CustomerNotFoundError{}
-	}
-
-	if err != nil {
-		return customerStatement, err
-	}
-
-	return customerStatement, nil
-}
-
-func (tctx TransactionRepository) LoadLastTenTransactions(ctx context.Context, customerId int) (Transactions, error) {
+func (tctx TransactionRepository) LoadLastTenTransactions(ctx context.Context, customerId int) ([]Transaction, error) {
 	rows, err := tctx.db.Query(ctx, "SELECT description, type, value, created_at FROM transactions WHERE customer_id = $1 ORDER BY transactions.id DESC LIMIT 10", customerId)
 
 	defer rows.Close()

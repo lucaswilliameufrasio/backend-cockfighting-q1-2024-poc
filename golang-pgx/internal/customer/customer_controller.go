@@ -1,4 +1,4 @@
-package transaction
+package customer
 
 import (
 	"backend-cockfighting-q1-2024-golang-pgx-poc/helper"
@@ -12,30 +12,23 @@ import (
 	"time"
 )
 
-type TransactionController struct {
-	transactionRepository TransactionRepository
+type CustomerController struct {
+	customerService CustomerService
 }
 
-func NewTransactionController(transactionRepository TransactionRepository) TransactionController {
-	return TransactionController{
-		transactionRepository: transactionRepository,
+func NewCustomerController(customerService CustomerService) CustomerController {
+	return CustomerController{
+		customerService: customerService,
 	}
 }
 
-type SaveTransactionRequestBody struct {
+type MakeTransactionRequestBody struct {
 	Value       int    `json:"valor"`
 	Type        string `json:"tipo"`
 	Description string `json:"descricao"`
 }
 
-type SaveTransactionInput struct {
-	CustomerId  int
-	Value       int
-	Type        string
-	Description string
-}
-
-func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http.Request) {
+func (tctx CustomerController) MakeTransaction(w http.ResponseWriter, r *http.Request) {
 	customerId, err := strconv.Atoi(r.PathValue("id"))
 
 	if err != nil {
@@ -48,17 +41,17 @@ func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http
 		return
 	}
 
-	var transaction SaveTransactionRequestBody
-	err = json.NewDecoder(r.Body).Decode(&transaction)
+	var transactionInput MakeTransactionRequestBody
+	err = json.NewDecoder(r.Body).Decode(&transactionInput)
 
 	if err != nil {
 		helper.MakeHttpUnprocessableEntityErrorResponse(w, "Não foi possível processar sua requisição, pois foram enviados dados inválidos")
 		return
 	}
 
-	descriptionLength := len(transaction.Description)
+	descriptionLength := len(transactionInput.Description)
 
-	if (transaction.Type != "c" && transaction.Type != "d") || descriptionLength <= 0 || descriptionLength > 10 {
+	if (transactionInput.Type != "c" && transactionInput.Type != "d") || descriptionLength <= 0 || descriptionLength > 10 {
 		helper.MakeHttpUnprocessableEntityErrorResponse(w, "Não foi possível processar sua requisição, pois foram enviados dados inválidos")
 		return
 	}
@@ -67,11 +60,11 @@ func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http
 
 	defer ctx.Done()
 
-	customerStatement, err := tctx.transactionRepository.SaveTransaction(ctx, SaveTransactionInput{
+	customerStatement, err := tctx.customerService.MakeTransaction(ctx, MakeTransactionInput{
 		CustomerId:  customerId,
-		Description: transaction.Description,
-		Type:        transaction.Type,
-		Value:       transaction.Value,
+		Description: transactionInput.Description,
+		Type:        transactionInput.Type,
+		Value:       transactionInput.Value,
 	})
 
 	if err != nil && errors.Is(err, &custom_error.CustomerNotFoundError{}) {
@@ -93,21 +86,7 @@ func (tctx TransactionController) SaveTransaction(w http.ResponseWriter, r *http
 	return
 }
 
-type CustomerStatement struct {
-	Balance int `json:"total"`
-	Limit   int `json:"limite"`
-}
-
-type Transaction struct {
-	Value       int       `json:"valor"`
-	Type        string    `json:"tipo"`
-	Description string    `json:"descricao"`
-	CreatedAt   time.Time `json:"realizada_em"`
-}
-
-type Transactions []Transaction
-
-type CustomerStatementResponse struct {
+type CustomerStatusResponse struct {
 	Balance     int    `json:"total"`
 	GeneratedAt string `json:"data_extrato"`
 	Limit       int    `json:"limite"`
@@ -123,14 +102,11 @@ type TransactionResponse struct {
 type TransactionsResponse []TransactionResponse
 
 type LoadBankStatementResponse struct {
-	CustomerStatementResponse `json:"saldo"`
-	TransactionsResponse      `json:"ultimas_transacoes"`
+	Status       CustomerStatusResponse `json:"saldo"`
+	Transactions TransactionsResponse   `json:"ultimas_transacoes"`
 }
 
-func (tctx TransactionController) LoadBankStatement(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	defer ctx.Done()
-
+func (tctx CustomerController) LoadStatement(w http.ResponseWriter, r *http.Request) {
 	customerId, err := strconv.Atoi(r.PathValue("id"))
 
 	if err != nil {
@@ -139,11 +115,15 @@ func (tctx TransactionController) LoadBankStatement(w http.ResponseWriter, r *ht
 	}
 
 	if customerId < 1 || customerId > 5 {
-		helper.MakeHttpNotFoundErrorResponse(w, "Cliente não encontrado")
+		customerNotFoundError := &custom_error.CustomerNotFoundError{}
+		helper.MakeHttpNotFoundErrorResponse(w, customerNotFoundError.Error())
 		return
 	}
 
-	customerStatement, err := tctx.transactionRepository.LoadCustomerStatement(ctx, customerId)
+	ctx := context.Background()
+	defer ctx.Done()
+
+	statementResult, err := tctx.customerService.LoadStatement(ctx, customerId)
 
 	if err != nil && errors.Is(err, &custom_error.CustomerNotFoundError{}) {
 		helper.MakeHttpNotFoundErrorResponse(w, err.Error())
@@ -155,16 +135,9 @@ func (tctx TransactionController) LoadBankStatement(w http.ResponseWriter, r *ht
 		return
 	}
 
-	transactions, err := tctx.transactionRepository.LoadLastTenTransactions(ctx, customerId)
-
-	if err != nil {
-		helper.MakeHttpInternalServerErrorResponse(w)
-		return
-	}
-
 	transactionsResponse := make([]TransactionResponse, 0, 10)
 
-	for _, transaction := range transactions {
+	for _, transaction := range statementResult.Transactions {
 		transactionResponse := TransactionResponse{
 			Type:        transaction.Type,
 			Value:       transaction.Value,
@@ -175,12 +148,12 @@ func (tctx TransactionController) LoadBankStatement(w http.ResponseWriter, r *ht
 	}
 
 	response, err := json.Marshal(LoadBankStatementResponse{
-		CustomerStatementResponse: CustomerStatementResponse{
-			Balance:     customerStatement.Balance,
+		Status: CustomerStatusResponse{
+			Balance:     statementResult.Status.Balance,
 			GeneratedAt: time.Now().Format(time.RFC3339),
-			Limit:       customerStatement.Limit,
+			Limit:       statementResult.Status.Limit,
 		},
-		TransactionsResponse: transactionsResponse,
+		Transactions: transactionsResponse,
 	})
 
 	if err != nil {

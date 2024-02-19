@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend-cockfighting-q1-2024-golang-pgx-poc/helper"
+	"backend-cockfighting-q1-2024-golang-pgx-poc/internal/customer"
 	"backend-cockfighting-q1-2024-golang-pgx-poc/internal/transaction"
 	"context"
 	"fmt"
@@ -61,11 +62,14 @@ func main() {
 	mux := http.NewServeMux()
 
 	transactionRepository := transaction.NewTransactionRepository(dbPool)
-	transactionController := transaction.NewTransactionController(transactionRepository)
+	transactionService := transaction.NewTransactionService(transactionRepository)
+	customerRepository := customer.NewCustomerRepository(dbPool)
+	customerService := customer.NewCustomerService(customerRepository, transactionService)
+	transactionController := customer.NewCustomerController(customerService)
 
 	mux.HandleFunc("GET /health-check", healthCheck)
-	mux.HandleFunc("POST /clientes/{id}/transacoes", transactionController.SaveTransaction)
-	mux.HandleFunc("GET /clientes/{id}/extrato", transactionController.LoadBankStatement)
+	mux.HandleFunc("POST /clientes/{id}/transacoes", transactionController.MakeTransaction)
+	mux.HandleFunc("GET /clientes/{id}/extrato", transactionController.LoadStatement)
 
 	address := fmt.Sprintf(":%s", os.Getenv("PORT"))
 
